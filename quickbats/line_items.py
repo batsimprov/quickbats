@@ -28,7 +28,7 @@ def transaction_line_item(total, description, qty, item, service_date):
 def vendor_rate_line_item(total, vendor_rate, vendor_fee_item, order_date):
     line = SalesItemLine()
     line.Amount = (-1) * vendor_rate * total
-    line.Description = "{} of {:.1%} of ${:.2f}".format(vendor_fee_item.Name, vendor_rate, total)
+    line.Description = "{} of {:.1%} of ${:.2f}".format(vendor_fee_item.Name, abs(vendor_rate), total)
 
     detail = SalesItemLineDetail()
     detail.ItemRef = vendor_fee_item.to_ref()
@@ -42,7 +42,7 @@ def vendor_rate_line_item(total, vendor_rate, vendor_fee_item, order_date):
 def vendor_unit_fee_line_item(vendor_rate, qty, vendor_fee_item, order_date):
     line = SalesItemLine()
     line.Amount = (-1) * vendor_rate * qty
-    line.Description = "{} of ${:.2f} x {}".format(vendor_fee_item.Name, vendor_rate, qty)
+    line.Description = "{} of ${:.2f} x {}".format(vendor_fee_item.Name, abs(vendor_rate), qty)
 
     detail = SalesItemLineDetail()
     detail.ItemRef = vendor_fee_item.to_ref()

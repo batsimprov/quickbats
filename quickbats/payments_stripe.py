@@ -18,7 +18,7 @@ def parse_stripe_payments():
     payments = {}
 
     stripe_payments_file = data_file("stripe", "payments_file")
-    for row in csv_rows(stripe_payments_file, 'latin-1'):
+    for row in csv_rows(stripe_payments_file, encoding='latin-1'):
         # skip old records
         created_on = datetime.strptime(row['Created (UTC)'], "%Y-%m-%d %H:%M")
         if created_on < import_start_date:

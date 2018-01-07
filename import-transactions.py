@@ -2,6 +2,7 @@ from quickbats.payments_stripe import parse_stripe_payments
 from quickbats.qbo import QBO
 from quickbats.vendor_donately import parse_donately_transactions
 from quickbats.vendor_vouchercart import parse_vouchercart_transactions
+from quickbats.vendor_vbo import parse_vbo_transactions
 
 qbo = QBO()
 qbo.connect()
@@ -11,3 +12,4 @@ qbo.connect()
 payments = parse_stripe_payments()
 parse_donately_transactions(qbo, payments)
 parse_vouchercart_transactions(qbo, payments)
+parse_vbo_transactions(qbo, payments)
