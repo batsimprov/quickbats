@@ -1,5 +1,4 @@
 from datetime import datetime
-from decimal import Decimal
 from quickbats.config import CONFIG
 from quickbats.line_items import stripe_fee_line_item
 from quickbats.line_items import transaction_line_item
@@ -7,13 +6,12 @@ from quickbats.line_items import vendor_unit_fee_line_item
 from quickbats.qbo import CreateReceipt
 from quickbats.shared import csv_rows
 from quickbats.shared import data_file
+from quickbats.shared import to_dec
+import json
 import logging
 
 logger = logging.getLogger("quickbats")
-
-
-def to_dec(string_with_dollar_sign):
-    return Decimal(string_with_dollar_sign.strip("$"))
+import_start_date = datetime(2017, 12, 1)
 
 
 def vbo_customer(qbo, row):
@@ -48,7 +46,8 @@ def parse_vbo_transactions(qbo, payments):
         price = to_dec(row['Price'])
         qty = to_dec(row['Qty'])
         vbo_fee = to_dec(row['VBOFee'])
-        credit_card = to_dec(row['CreditCard'])
+        is_credit_card = to_dec(row['CreditCard']) > 0
+        is_exchange = row['Other Name'] == 'Exchange'
         try:
             event_date = datetime.strptime(row['Event Date'], "%m/%d/%Y %I:%M:%S %p")
         except ValueError:
@@ -61,12 +60,17 @@ def parse_vbo_transactions(qbo, payments):
             logger.debug("reached end of records")
             break
 
-        if qbo.already_processed(doc_number):
+        if order_date < import_start_date:
+            logger.debug("skipping because before %s" % import_start_date)
+            continue
+        elif qbo.already_processed(doc_number):
             continue
         elif total == 0.0:
-            logger.debug("skipping because comp.")
+            logger.debug("skipping because comp")
             continue
-        elif (credit_card > 0) and (doc_number not in payments):
+        elif is_exchange:
+            logger.debug("skipping because exchange")
+        elif is_credit_card and (doc_number not in payments):
             msg = "fee information not available yet, skipping %s" % doc_number
             logger.info(msg)
             continue
@@ -88,13 +92,13 @@ def parse_vbo_transactions(qbo, payments):
             is_door_sale = ("Door" in row['ItemName'])
             if is_door_sale:
                 item = door_sale_item
+            elif ("Advance" in row['ItemName']) or ("Admission" in row['ItemName']):
+                item = advance_sale_item
+            elif "Pack" in row['ItemName']:
+                item = subscription_sale_item
             else:
-                if "Advance" in row['ItemName']:
-                    item = advance_sale_item
-                elif "Pack" in row['ItemName']:
-                    item = subscription_sale_item
-                else:
-                    raise Exception("can't identify product '%s'" % row['ItemName'])
+                logger.error("\n%s" % json.dumps(row, sort_keys=True, indent=4))
+                raise Exception("can't identify product '%s'" % row['ItemName'])
 
             description =  u"%s; %s" % (row['ItemDescription'], row['Event Name'])
             receipt.Line.append(transaction_line_item(price, description, qty, item, event_date))
@@ -105,7 +109,7 @@ def parse_vbo_transactions(qbo, payments):
             else:
                 receipt.Line.append(vendor_unit_fee_line_item(-1 * vbo_fee, qty, vbo_fees_item, order_date))
 
-            if credit_card > 0:
+            if is_credit_card:
                 stripe_fees_line = stripe_fee_line_item(payments, total, doc_number, stripe_fees_item, order_date)
                 receipt.Line.append(stripe_fees_line)
                 receipt.DepositToAccountRef = credit_card_receivables_account.to_ref()
