@@ -1,0 +1,4 @@
+# quick books auth config goes in a file named auth.yml, see also quickbats/tokens-example.py
+quickbooks_client_id: "ABCDEF"
+quickbooks_client_secret: "12345"
+realm_id: "999999999999"

@@ -1,0 +1,24 @@
+# app and vendor config goes in a file named config.yml
+app:
+    logsdir: logs
+    datadir: data
+    sandbox: True # whether we are accessing the 'sandbox' endpoint
+    sandbox_realm: "" # the realm ID for the sandbox account being accessed
+
+stripe:
+    payments_file: payments.csv
+    rate: !decimal 0.029
+    fixed: !decimal 0.30
+    amex_rate: !decimal 0.055
+
+donately:
+    transactions_file: donations.csv
+    rate: !decimal 0.05
+
+vouchercart:
+    transactions_file: vouchers.csv
+    rate: !decimal 0.05
+
+vbo:
+    transactions_file: tickets.csv
+    header_row: 13
