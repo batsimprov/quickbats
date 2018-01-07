@@ -66,7 +66,7 @@ def stripe_fee_line_item(payments, total, payment_id, stripe_fees_item, order_da
     total_fee = Decimal(payment_info['Fee'])
 
     remaining_fee = total_fee - abs(other_fees)
-    logger.debug("fees unaccounted for so far %s" % remaining_fee)
+    logger.debug("reconciling remaining fees (after other fees of %s)  %s" % (other_fees, remaining_fee))
 
     line = SalesItemLine()
 
