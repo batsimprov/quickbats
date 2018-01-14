@@ -9,10 +9,12 @@ offer classes for individuals and customized corporate training and experiences
 through our Improv @ Work program.
 
 Visit us online https://improv.org
-Get in touch mailto:bats@improv.org
+
+Get in touch bats@improv.org
 
 If you find this software useful, please consider making a tax-deductible
 donation to BATS Improv (it's quick and easy)!
+
 https://improv.org/support-bats
 
 This package contains tools used by BATS Improv (https://improv.org) to manage
