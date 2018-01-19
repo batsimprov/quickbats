@@ -10,6 +10,8 @@ from quickbats.shared import csv_rows
 from quickbats.shared import data_file
 import logging
 
+DONATION_ITEM_NAME = "Online Donation"
+
 logger = logging.getLogger("quickbats")
 
 
@@ -33,10 +35,11 @@ def donately_doc_number(row):
 
 def parse_donately_transactions(qbo, payments):
     donately_transactions_file = data_file("donately", "transactions_file")
-    donation_item = qbo.get_item_by_name("Donation")
+    donation_item = qbo.get_item_by_name(DONATION_ITEM_NAME)
     donately_fees_item = qbo.get_item_by_name("Donately Fees")
-    stripe_fees_item = qbo.get_item_by_name("Stripe Fees")
+    stripe_fees_item = qbo.get_item_by_name("Stripe Fees (Donations)")
     credit_card_receivables_account = qbo.get_account_by_name("Stripe Receivables")
+    qbo_class = qbo.get_class_by_name("5 Fundraising")
 
     for row in csv_rows(donately_transactions_file):
         doc_number = donately_doc_number(row)
@@ -68,11 +71,11 @@ def parse_donately_transactions(qbo, payments):
             note = u"\n".join(notes)
             receipt.PrivateNote = note
 
-            line1 = transaction_line_item(total, "Donation", one, donation_item, order_date)
+            line1 = transaction_line_item(total, "Donation", one, donation_item, order_date, qbo_class=qbo_class)
 
             if donation_type == 'cc':
-                line2 = vendor_rate_line_item(total, CONFIG['donately']['rate'], donately_fees_item, order_date)
-                line3 = stripe_fee_line_item(payments, total, row['Transaction Id'], stripe_fees_item, order_date, abs(line2.Amount))
+                line2 = vendor_rate_line_item(total, CONFIG['donately']['rate'], donately_fees_item, order_date, qbo_class=qbo_class)
+                line3 = stripe_fee_line_item(payments, total, row['Transaction Id'], stripe_fees_item, order_date, abs(line2.Amount), qbo_class=qbo_class)
 
                 receipt.Line = [line1, line2, line3]
                 receipt.DepositToAccountRef = credit_card_receivables_account.to_ref()

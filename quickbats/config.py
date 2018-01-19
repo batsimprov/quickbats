@@ -1,5 +1,6 @@
+from datetime import datetime
 from decimal import Decimal
-from quickbats.tokens import TOKENS ; TOKENS # so pyflakes doesn't complain
+from quickbats.tokens import TOKENS; TOKENS
 import decimal
 import logging
 import os
@@ -13,8 +14,11 @@ def decimal_constructor(loader, node):
 
 yaml.add_constructor(u'!decimal', decimal_constructor)
 
-with open("config.yml", 'rb') as f:
+with open("config-quickbats.yml", 'rb') as f:
     CONFIG = yaml.load(f)
+
+CONFIG['app']['start_date'] = datetime.strptime(CONFIG['app']['start_date_raw'], "%Y-%m-%d")
+CONFIG['app']['start_date_timestamp'] = int(CONFIG['app']['start_date'].timestamp())
 
 with open("auth.yml", 'rb') as f:
     AUTH = yaml.load(f)

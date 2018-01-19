@@ -58,6 +58,25 @@ class QBO(object):
     def get_account_by_name(self, name):
         return self.get_object_by_name(Account, name)
 
+    def find_or_create_item(self, name, description, income_account, category_ref):
+        existing_items = Item.filter(Name = name, qb=self.client)
+        if len(existing_items) == 0:
+            logger.debug("did not find item matching '%s'" % name)
+            logger.debug("creating new item...")
+            new_item = Item()
+            new_item.Name = name
+            new_item.Description = description
+            new_item.SubItem = True
+            new_item.Type = "Service"
+            new_item.ParentRef = category_ref
+            new_item.IncomeAccountRef = income_account.to_ref()
+            new_item.save(qb=self.client)
+            return new_item
+        elif len(existing_items) == 1:
+            logger.debug("using existing item for %s" % name)
+            value = existing_items[0]
+            return value
+
     def find_or_create_customer(self, display_name, customer_attrs):
         key = "%s:%s" % (Customer.__name__, display_name)
         if key in self._cache:
@@ -81,12 +100,13 @@ class QBO(object):
             logger.debug("about to create new customer '%s'" % str(new_customer))
             new_customer.save(qb=self.client)
             logger.debug("new customer created!")
-            return new_customer
+            self._cache[key] = new_customer
+            return self._cache[key]
         elif len(existing_customers) == 1:
             logger.debug("using existing customer for %s" % display_name)
             value = existing_customers[0]
             self._cache[key] = value
-            return value
+            return self._cache[key]
         else:
             logger.error("non-unique customer display name %s" % display_name)
             raise Exception("shouldn't get here - QBO doesn't allow duplicates")
@@ -118,17 +138,22 @@ class QBO(object):
         try:
             receipt.save(qb=self.client)
         except Exception as e:
+            logger.error(e.detail)
+            logger.warn(e.detail)
             for line in traceback.format_exc().splitlines():
                 logger.error(line)
-            logger.error(e.detail)
 
 class CreateReceipt(object):
-    def __init__(self, qbo):
+    def __init__(self, qbo, test_mode=False):
         self.qbo = qbo
+        self.test_mode = test_mode
 
     def __enter__(self):
         self.receipt = SalesReceipt()
         return self.receipt
 
     def __exit__(self, type, value, traceback):
-        self.qbo.save_receipt(self.receipt)
+        if self.test_mode:
+            print(self.receipt.to_json())
+        else:
+            self.qbo.save_receipt(self.receipt)

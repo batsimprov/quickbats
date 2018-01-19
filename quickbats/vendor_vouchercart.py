@@ -31,8 +31,9 @@ def vouchercart_doc_number(row):
 
 def parse_vouchercart_transactions(qbo, payments):
     vouchercart_transactions_file = data_file("vouchercart", "transactions_file")
-    stripe_fees_item = qbo.get_item_by_name("Stripe Fees")
+    stripe_fees_item = qbo.get_item_by_name("Stripe Fees (Vouchers)")
     credit_card_receivables_account = qbo.get_account_by_name("Stripe Receivables")
+    qbo_class = qbo.get_class_by_name("2 School")
 
     active_doc_number = None
     active_order = []
@@ -47,7 +48,7 @@ def parse_vouchercart_transactions(qbo, payments):
         order_date = datetime.strptime(first_row['OrderDate'], "%m/%d/%Y %H:%M")
         total = sum(Decimal(row["VoucherPrice"]) for row in active_order)
 
-        with CreateReceipt(qbo) as receipt:
+        with CreateReceipt(qbo, test_mode=True) as receipt:
             receipt.CustomerRef = customer.to_ref()
             receipt.DocNumber = doc_number
             receipt.TxnDate = order_date.strftime("%Y-%m-%d")
@@ -61,10 +62,11 @@ def parse_vouchercart_transactions(qbo, payments):
                         row['VoucherTitle'],
                         one,
                         qbo.get_item_by_name(row['VoucherTitle']),
-                        order_date)
+                        order_date,
+                        qbo_class=qbo_class)
                 receipt.Line.append(voucher_line_item)
 
-            receipt.Line.append(stripe_fee_line_item(payments, total, first_row['PaymentReference'], stripe_fees_item, order_date))
+            receipt.Line.append(stripe_fee_line_item(payments, total, first_row['PaymentReference'], stripe_fees_item, order_date, qbo_class=qbo_class))
 
             receipt.DepositToAccountRef = credit_card_receivables_account.to_ref()
 
@@ -72,6 +74,11 @@ def parse_vouchercart_transactions(qbo, payments):
     # aggregate the rows for each order, then process all rows at once
     for row in csv_rows(vouchercart_transactions_file):
         doc_number = vouchercart_doc_number(row)
+
+        if "Imported-" in row['OrderID']:
+            logger.debug("skipping imported voucher")
+            continue
+
         logger.debug("doc_number is %s" % doc_number)
 
         if qbo.already_processed(doc_number):

@@ -11,7 +11,6 @@ import json
 import logging
 
 logger = logging.getLogger("quickbats")
-import_start_date = datetime(2017, 12, 1)
 
 
 def vbo_customer(qbo, row):
@@ -35,18 +34,23 @@ def parse_vbo_transactions(qbo, payments):
     door_sale_item = qbo.get_item_by_name("General Admission - Door")
     subscription_sale_item = qbo.get_item_by_name("Ticket Subscription")
     vbo_fees_item = qbo.get_item_by_name("VBO Fees")
-    stripe_fees_item = qbo.get_item_by_name("Stripe Fees")
-    shows_class = qbo.get_class_by_name("Shows")
+    stripe_fees_item = qbo.get_item_by_name("Stripe Fees (Ticketing)")
     credit_card_receivables_account = qbo.get_account_by_name("Stripe Receivables")
+    qbo_class = qbo.get_class_by_name("3 Shows")
 
     for row in csv_rows(vbo_transactions_file, skip_rows=CONFIG['vbo']['header_row']):
+        if row['ItemDescription'] == "Total:":
+            logger.debug("reached end of records")
+            break
+
         doc_number = "VBO-%s" % row['OrderID']
         order_date = datetime.strptime(row['Orders'], "%m/%d/%Y %I:%M:%S %p")
         total = to_dec(row['Total'])
         price = to_dec(row['Price'])
         qty = to_dec(row['Qty'])
         vbo_fee = to_dec(row['VBOFee'])
-        is_credit_card = to_dec(row['CreditCard']) > 0
+        is_credit_card = to_dec(row['CreditCard']) > 0 or to_dec(row['Amex']) > 0
+
         is_exchange = row['Other Name'] == 'Exchange'
         try:
             event_date = datetime.strptime(row['Event Date'], "%m/%d/%Y %I:%M:%S %p")
@@ -56,12 +60,8 @@ def parse_vbo_transactions(qbo, payments):
 
         logger.debug("doc number is %s" % doc_number)
 
-        if row['ItemDescription'] == "Total:":
-            logger.debug("reached end of records")
-            break
-
-        if order_date < import_start_date:
-            logger.debug("skipping because before %s" % import_start_date)
+        if order_date < CONFIG['app']['start_date']:
+            logger.debug("skipping because before %s" % CONFIG['app']['start_date'])
             continue
         elif qbo.already_processed(doc_number):
             continue
@@ -81,7 +81,6 @@ def parse_vbo_transactions(qbo, payments):
             receipt.CustomerRef = customer.to_ref()
             receipt.DocNumber = doc_number
             receipt.TxnDate = order_date.strftime("%Y-%m-%d")
-            receipt.ClassRef = shows_class.to_ref()
 
             notes = ["Imported via QBO API from VBO export."]
             if row['Notes']:
@@ -101,15 +100,15 @@ def parse_vbo_transactions(qbo, payments):
                 raise Exception("can't identify product '%s'" % row['ItemName'])
 
             description =  u"%s; %s" % (row['ItemDescription'], row['Event Name'])
-            receipt.Line.append(transaction_line_item(price, description, qty, item, event_date))
+            receipt.Line.append(transaction_line_item(price, description, qty, item, event_date, qbo_class=qbo_class))
 
             if is_door_sale:
                 # VBO fees are not added on top
                 pass
             else:
-                receipt.Line.append(vendor_unit_fee_line_item(-1 * vbo_fee, qty, vbo_fees_item, order_date))
+                receipt.Line.append(vendor_unit_fee_line_item(-1 * vbo_fee, qty, vbo_fees_item, order_date, qbo_class=qbo_class))
 
             if is_credit_card:
-                stripe_fees_line = stripe_fee_line_item(payments, total, doc_number, stripe_fees_item, order_date)
+                stripe_fees_line = stripe_fee_line_item(payments, total, doc_number, stripe_fees_item, order_date, qbo_class=qbo_class)
                 receipt.Line.append(stripe_fees_line)
                 receipt.DepositToAccountRef = credit_card_receivables_account.to_ref()

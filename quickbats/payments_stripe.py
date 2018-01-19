@@ -1,46 +1,51 @@
-from datetime import datetime
+from quickbats.config import CONFIG
 from quickbats.config import logger
-from quickbats.shared import csv_rows
-from quickbats.shared import data_file
+import stripe
 
-import_start_date = datetime(2017, 11, 1)
+stripe.api_key = CONFIG['stripe']['api_key']
+limit = CONFIG['stripe']['batch_size']
 
-# TODO rewrite this to use Stripe API instead of CSV export, for fully automated process
+def iter_charges():
+    has_more = True
+    last_object_id = None
+    created_filter = {'gt' : CONFIG['app']['start_date']}
+
+    while has_more:
+        logger.debug("fetching %s more charges from stripe API" % limit)
+        charges = stripe.Charge.list(
+                created=created_filter,
+                limit=limit,
+                starting_after=last_object_id
+            )
+        for charge in charges:
+            last_object_id = charge.id
+            yield(charge)
+        has_more = charges.has_more
 
 def parse_stripe_payments():
-    """
-    Parses the Stripe Payments export file (payments.csv) and generates a
-    dictionary with matchable transaction ID for each transaction type.
-
-    We then use this dictionary to look up payment information when we are
-    processing transactions.
-    """
     payments = {}
 
-    stripe_payments_file = data_file("stripe", "payments_file")
-    for row in csv_rows(stripe_payments_file, encoding='latin-1'):
-        # skip old records
-        created_on = datetime.strptime(row['Created (UTC)'], "%Y-%m-%d %H:%M")
-        if created_on < import_start_date:
-            continue
+    for charge in iter_charges():
+        description = charge.description or ''
+        statement_descriptor = charge.statement_descriptor or ''
 
         # identify transaction type, then store row under some unique payment
         # identifier which we have access to from vendor data
-        if "Bats Improv  - #" in row['Description']:
+        if "Bats Improv  - #" in description:
             # VBO Transaction
-            vbo_id = row['Description'][-7:]
-            payments["VBO-%s" % vbo_id] = row
-        elif ("BATS Improv Inv" in row['Statement Descriptor']) or ("BATS Invoice" in row['Statement Descriptor']):
+            vbo_id = charge.description[-7:]
+            payments["VBO-%s" % vbo_id] = charge
+        elif ("BATS Improv Inv" in statement_descriptor) or ("BATS Invoice" in statement_descriptor):
             # Manually generated invoice, not relevant to this process.
             pass
-        elif row['purchased_on (metadata)']:
+        elif 'purchased_on' in charge.metadata:
             # Vouchercart Transaction
-            payments[row['id']] = row
-        elif row['donation (metadata)']:
+            payments[charge.id] = charge
+        elif 'donation' in charge.metadata:
             # Donately Transaction
-            payments[row['id']] = row
+            payments[charge.id] = charge
         else:
             logger.warn("unable to categorize this Stripe transaction:")
-            logger.warn(str(row))
+            logger.warn(str(charge))
 
     return payments
